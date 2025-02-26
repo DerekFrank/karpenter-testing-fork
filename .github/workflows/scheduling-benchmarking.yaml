@@ -26,12 +26,12 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            github.rest.issues.createComment({
+            "github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: "$GITHUB_OUTPUT"
-            })
+              body: '$GITHUB_OUTPUT'
+            })""
   after:
     permissions:
         pull-requests: write
@@ -47,9 +47,9 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            github.rest.issues.createComment({
+            "github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: "$GITHUB_OUTPUT"
-            })
+              body: '$GITHUB_OUTPUT'
+            })"
