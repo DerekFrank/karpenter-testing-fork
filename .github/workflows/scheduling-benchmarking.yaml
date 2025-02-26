@@ -3,7 +3,7 @@ name: "Scheduling Benchmarking"
 on:
   pull_request:
     paths:
-      - pkg/provisioning/scheduling/*
+      - pkg/controllers/provisioning/*
 
 jobs:
   before:
