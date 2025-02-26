@@ -267,6 +267,7 @@ func (r Results) TruncateInstanceTypes(maxInstanceTypes int) Results {
 
 //nolint:gocyclo
 func (s *Scheduler) Solve(ctx context.Context, pods []*corev1.Pod) Results {
+	// Adding a new comment to get github actions to think the scheduling alg changed
 	defer metrics.Measure(DurationSeconds, map[string]string{ControllerLabel: injection.GetControllerName(ctx)})()
 	// We loop trying to schedule unschedulable pods as long as we are making progress.  This solves a few
 	// issues including pods with affinity to another pod in the batch. We could topo-sort to solve this, but it wouldn't
