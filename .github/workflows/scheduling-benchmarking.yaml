@@ -2,8 +2,11 @@ name: "Scheduling Benchmarking"
 
 on:
   pull_request:
-    paths:
-      - pkg/controllers/provisioning/*
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
 
 jobs:
   before:
