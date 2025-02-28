@@ -16,11 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        id: test-run
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-      - run: |
+      - name: Run Test
+        id: test-run
+        run: |
           {
             cd pkg/controllers/provisioning/scheduling
             echo 'BEFORE_OUTPUT<<EOF'
@@ -48,7 +49,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: |
+      - name: Run Test
+        id: test-run
+        run: |
           {
             cd pkg/controllers/provisioning/scheduling
             echo 'BEFORE_OUTPUT<<EOF'
