@@ -36,7 +36,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: jobs.before.steps.test-run-before.outputs.BEFORE_OUTPUT
+              body: context
             })
   after:
     permissions:
@@ -64,5 +64,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: jobs.before.steps.test-run-after.outputs.AFTER_OUTPUT
+              body: github
             })
