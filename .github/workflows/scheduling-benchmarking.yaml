@@ -27,18 +27,21 @@ jobs:
             echo 'BEFORE_OUTPUT<<EOF'
             go test -tags=test_performance -run=SchedulingProfile
             echo EOF
-          } >> "$GITHUB_OUTPUT"
+          } >> "$GITHUB_ENV"
       - uses: actions/github-script@v7
         with:
           env:
+            BEFORE_OUTPUT: ${{ steps.test-run-before.outputs.AFTER_OUTPUT }}
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
+            const { BEFORE_OUTPUT } = process.env
             console.log(context)
+            console.log(`${BEFORE_OUTPUT}`)
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: context
+              body: github
             })
   after:
     permissions:
@@ -59,10 +62,13 @@ jobs:
             echo EOF
           } >> "$GITHUB_OUTPUT"
       - uses: actions/github-script@v7
+        env:
+          Custom-Val: ${{ steps.test-run-after.outputs.AFTER_OUTPUT }}
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
             console.log(context)
+            console.log(`${Custom-Val}`)
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
