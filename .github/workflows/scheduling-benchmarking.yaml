@@ -29,8 +29,8 @@ jobs:
             echo EOF
           } >> "$GITHUB_OUTPUT"
       - uses: actions/github-script@v7
-        env:BEFORE_OUTPUT
-          RESULTS: ${{ steps.test-run-after.outputs.AFTER_OUTPUT }}
+        env:
+          RESULTS: ${{ steps.test-run-after.outputs.BEFORE_OUTPUT }}
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
