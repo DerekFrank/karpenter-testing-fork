@@ -1,0 +1,29 @@
+name: RunPerfTest
+description: 'Runs A given Performance Test'
+inputs:
+  path:
+    description: Path to the performance test
+    default: ""
+  outputName:
+    description: Name of the output file
+    default: ""
+  commitRef:
+    description: Reference to use for checking out the package
+    default: ""
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.commitRef }}
+        fetch-depth: 0
+    - name: Run Test
+      run: |
+          cd ${{ inputs.path }}
+          mkdir output
+          go test -tags=test_performance -run=1 -bench=. -count=1 -cpuprofile output/cpu.out -memprofile output/mem.out > output/results.txt
+          cat output/results.txt
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.outputName }}
+        path: ${{ inputs.path }}/output
