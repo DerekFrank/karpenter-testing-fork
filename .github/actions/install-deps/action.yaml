@@ -15,7 +15,7 @@ runs:
         cache-dependency-path: "**/go.sum"
     # Root path permission workaround for caching https://github.com/actions/cache/issues/845#issuecomment-1252594999
     - run: sudo chown "$USER" /usr/local
-      shell: bash
+      
     - uses: actions/cache@0c907a75c2c80ebcb7f088228285e798b750cf8f # v4.2.1
       id: cache-toolchain
       with:
