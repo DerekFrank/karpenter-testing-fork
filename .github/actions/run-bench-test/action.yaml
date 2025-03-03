@@ -7,6 +7,9 @@ inputs:
   artifactName:
     description: Name of the artifact file
     default: ""
+  githubToken:
+    descriptuon: Github secret token to use for commenting on PR
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -30,7 +33,7 @@ runs:
       env:
         RESULTS: ${{ steps.test-run.outputs.OUTPUT }}
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+        github-token: ${{ inputs.githubToken }}
         script: |
             github.rest.issues.createComment({
               issue_number: context.issue.number,
