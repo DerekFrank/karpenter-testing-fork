@@ -20,27 +20,19 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
       - name: Run Test
-        id: test-run-after
+        id: test-run-before
         run: |
-          {
             cd pkg/controllers/provisioning/scheduling
-            echo 'BEFORE_OUTPUT<<EOF'
-            go test -tags=test_performance -run=SchedulingProfile
-            echo EOF
-          } >> "$GITHUB_OUTPUT"
-      - uses: actions/github-script@v7
-        env:
-          RESULTS: ${{ steps.test-run-after.outputs.BEFORE_OUTPUT }}
+            mkdir output
+            go test -tags=test_performance -run=1 -bench=. -benchmem -cpuprofile output/cpu.out -memprofile output/mem.out > output/results.txt
+            cat output/cpu.out
+            cat output/mem.out
+            cat output/results.txt
+      - uses: actions/upload-artifact@v4
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `${process.env.RESULTS}`
-            })
-  after:
+          name: test-results-before
+          path: pkg/controllers/provisioning/scheduling/output
+  before:
     permissions:
         pull-requests: write
     name: After PR
@@ -48,25 +40,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
       - name: Run Test
         id: test-run-after
         run: |
-          {
             cd pkg/controllers/provisioning/scheduling
-            echo 'AFTER_OUTPUT<<EOF'
-            go test -tags=test_performance -run=SchedulingProfile
-            echo EOF
-          } >> "$GITHUB_OUTPUT"
-      - uses: actions/github-script@v7
-        env:
-          RESULTS: ${{ steps.test-run-after.outputs.AFTER_OUTPUT }}
+            mkdir output
+            go test -tags=test_performance -run=1 -bench=. -benchmem -cpuprofile output/cpu.out -memprofile output/mem.out > output/results.txt
+            cat output/cpu.out
+            cat output/mem.out
+            cat output/results.txt
+      - uses: actions/upload-artifact@v4
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `${process.env.RESULTS}`
-            })
+          name: test-results-after
+          path: pkg/controllers/provisioning/scheduling/output
