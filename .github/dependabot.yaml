@@ -62,7 +62,7 @@ updates:
         patterns:
           - '*'
   - package-ecosystem: github-actions
-    directory: .github/actions/run-perf-test
+    directory: .github/actions/run-bench-test
     schedule:
       interval: weekly
     groups:
