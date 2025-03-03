@@ -11,6 +11,7 @@ runs:
   using: "composite"
   steps:
     - name: Run Test
+      shell: bash
       run: |
           cd ${{ inputs.path }}
           mkdir output
