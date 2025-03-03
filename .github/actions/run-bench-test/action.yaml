@@ -1,0 +1,40 @@
+name: RunBenchTest
+description: 'Runs a given Benchmark Test'
+inputs:
+  path:
+    description: Path to the performance test
+    default: ""
+  artifactName:
+    description: Name of the artifact file
+    default: ""
+runs:
+  using: "composite"
+  steps:
+    - name: Run Test
+      id: test-run
+      shell: bash
+      run: |
+        {
+          cd ${{ inputs.path }}
+          mkdir output
+          go test -tags=test_performance -run=1 -bench=. -count=1 -cpuprofile output/cpu.out -memprofile output/mem.out > output/results.txt
+          echo 'OUTPUT<<EOF'
+          cat output/results.txt
+          echo EOF
+        } >> "$GITHUB_OUTPUT"
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.outputName }}
+        path: ${{ inputs.path }}/output
+    - uses: actions/github-script@v7
+      env:
+        RESULTS: ${{ steps.test-run.outputs.OUTPUT }}
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+      script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `Results of running benchmarking testing in \`${{ inputs.path }}\`: \n \`\`\`${process.env.RESULTS}\`\`\``
+          })
