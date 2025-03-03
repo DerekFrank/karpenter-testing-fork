@@ -21,7 +21,7 @@ jobs:
       - uses: ./.github/actions/run-bench-test
         with:
             path: pkg/controllers/provisioning/scheduling
-            artifactName: before
+            runName: before
             githubToken: ${{ secrets.GITHUB_TOKEN }}
   after:
     name: After PR
@@ -36,6 +36,6 @@ jobs:
       - uses: ./.github/actions/run-bench-test
         with:
             path: pkg/controllers/provisioning/scheduling
-            artifactName: after
+            runName: after
             githubToken: ${{ secrets.GITHUB_TOKEN }}
   
