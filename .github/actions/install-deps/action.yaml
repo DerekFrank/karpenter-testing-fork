@@ -26,4 +26,5 @@ runs:
         # upstream go issue is corrected and if this is causing too many cache misses.
         key: ${{ runner.os }}-${{ inputs.k8sVersion }}-${{ steps.setup-go.outputs.go-version }}-toolchain-cache-${{ hashFiles('hack/toolchain.sh') }}
     - if: ${{ steps.cache-toolchain.outputs.cache-hit != 'true' }}
+      shell: bash
       run: K8S_VERSION=${{ inputs.k8sVersion }} make toolchain
