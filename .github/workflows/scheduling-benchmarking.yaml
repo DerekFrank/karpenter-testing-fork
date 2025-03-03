@@ -10,48 +10,19 @@ on:
 
 jobs:
   before:
-    permissions:
-        pull-requests: write
     name: Before PR
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: ./.github/actions/install-deps
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-      - name: Run Test
-        id: test-run-before
-        run: |
-            cd pkg/controllers/provisioning/scheduling
-            mkdir output
-            go test -tags=test_performance -run=1 -bench=. -benchmem -cpuprofile output/cpu.out -memprofile output/mem.out > output/results.txt
-            cat output/cpu.out
-            cat output/mem.out
-            cat output/results.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: test-results-before
-          path: pkg/controllers/provisioning/scheduling/output
+            path: pkg/controllers/provisioning/scheduling
+            outputName: before
   after:
-    permissions:
-        pull-requests: write
     name: After PR
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: ./.github/actions/install-deps
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-      - name: Run Test
-        id: test-run-after
-        run: |
-            cd pkg/controllers/provisioning/scheduling
-            mkdir output
-            go test -tags=test_performance -run=1 -bench=. -benchmem -cpuprofile output/cpu.out -memprofile output/mem.out > output/results.txt
-            cat output/cpu.out
-            cat output/mem.out
-            cat output/results.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: test-results-after
-          path: pkg/controllers/provisioning/scheduling/output
+            path: pkg/controllers/provisioning/scheduling
+            outputName: after
+            commitRef: ${{ github.event.pull_request.head.sha }}
