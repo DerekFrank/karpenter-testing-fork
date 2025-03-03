@@ -39,5 +39,5 @@ runs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `#${{ inputs.runName }} \nResults of ${{ inputs.runName }} benchmarking testing in \`${{ inputs.path }}\` for step: \n\`\`\`${process.env.RESULTS}\`\`\``
+              body: `# :mag:${{ inputs.runName }}:mag:\nResults of ${{ inputs.runName }} benchmarking testing in \`${{ inputs.path }}\`: \n\`\`\`${process.env.RESULTS}\`\`\``
             })
