@@ -7,16 +7,9 @@ inputs:
   outputName:
     description: Name of the output file
     default: ""
-  commitRef:
-    description: Reference to use for checking out the package
-    default: ""
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ inputs.commitRef }}
-        fetch-depth: 0
     - name: Run Test
       run: |
           cd ${{ inputs.path }}
