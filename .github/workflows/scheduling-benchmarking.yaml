@@ -32,7 +32,7 @@ jobs:
         with:
           name: test-results-before
           path: pkg/controllers/provisioning/scheduling/output
-  before:
+  after:
     permissions:
         pull-requests: write
     name: After PR
