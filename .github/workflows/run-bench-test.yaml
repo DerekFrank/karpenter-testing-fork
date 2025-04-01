@@ -14,7 +14,7 @@ on:
         required: true
         type: string
     secrets:
-      access-token:
+      github-access-token:
         description: token for writing to github PRs
         required: true
 jobs:
@@ -46,7 +46,7 @@ jobs:
           RESULTS: ${{ steps.test-run.outputs.OUTPUT }}
           UPLOAD: ${{ steps.artifact-upload.outputs.artifact-url }}
         with:
-          github-token: ${{ secrets.access-token }}
+          github-token: ${{ secrets.github-access-token }}
           script: |
               github.rest.issues.createComment({
                 issue_number: context.issue.number,

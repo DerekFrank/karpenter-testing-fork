@@ -18,7 +18,7 @@ jobs:
         path: ["pkg/controllers/provisioning/scheduling"]
     uses: ./.github/workflows/run-bench-test.yaml
     secrets: 
-      access-token: ${{ secrets.access-token }}
+      github-access-token: ${{ secrets.access-token }}
     with:
         path: ${{ matrix.path }}
         runName: before-${{ strategy.job-index }}
@@ -33,7 +33,7 @@ jobs:
         path: ["pkg/controllers/provisioning/scheduling"]
     uses: ./.github/workflows/run-bench-test.yaml
     secrets: 
-      access-token: ${{ secrets.access-token }}
+      github-access-token: ${{ secrets.access-token }}
     with:
         path: ${{ matrix.path }}
         runName: after-${{ strategy.job-index }}  
