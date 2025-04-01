@@ -3,13 +3,10 @@ description: 'Runs a given Benchmark Test'
 inputs:
   path:
     description: Path to the performance test
-    default: ""
+    required: true
   runName:
     description: Name of the run, for the purpose of file naming and github comments
-    default: ""
-  githubToken:
-    descriptuon: Github secret token to use for commenting on PR
-    default: ""
+    required: true
 runs:
   using: "composite"
   steps:
@@ -35,7 +32,7 @@ runs:
         RESULTS: ${{ steps.test-run.outputs.OUTPUT }}
         UPLOAD: ${{ steps.artifact-upload.outputs.artifact-url }}
       with:
-        github-token: ${{ inputs.githubToken }}
+        github-token: ${{ secrets.CALLING_WORKFLOW_SECRET }}
         script: |
             github.rest.issues.createComment({
               issue_number: context.issue.number,
