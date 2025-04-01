@@ -10,35 +10,29 @@ on:
 jobs:
   before:
     name: Before PR
-    runs-on: ubuntu-latest
     permissions:
         pull-requests: write
     strategy:
       fail-fast: false
       matrix:
         path: ["pkg/controllers/provisioning/scheduling"]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-      - uses: ./.github/actions/run-bench-test
-        secrets: inherit
-        with:
-            path: ${{ matrix.path }}
-            runName: before-${{ strategy.job-index }}
+    secrets: inherit
+    uses: ./.github/workflows/run-bench-test.yaml
+    with:
+        path: ${{ matrix.path }}
+        runName: before-${{ strategy.job-index }}
+        githubSha: ${{ github.event.pull_request.base.sha }}
   after:
     name: After PR
-    runs-on: ubuntu-latest
+    secrets: inherit
     permissions:
       pull-requests: write
     strategy:
       fail-fast: false
       matrix:
         path: ["pkg/controllers/provisioning/scheduling"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/run-bench-test
-        secrets: inherit
-        with:
-            path: ${{ matrix.path }}
-            runName: after-${{ strategy.job-index }}  
+    uses: ./.github/workflows/run-bench-test.yaml
+    with:
+        path: ${{ matrix.path }}
+        runName: after-${{ strategy.job-index }}  
+        githubSha: ${{ github.sha }}
