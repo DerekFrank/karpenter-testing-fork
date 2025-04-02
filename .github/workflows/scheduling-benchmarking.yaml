@@ -17,12 +17,11 @@ jobs:
       matrix:
         path: ["pkg/controllers/provisioning/scheduling"]
     uses: ./.github/workflows/run-bench-test.yaml
-    secrets: 
-      github-access-token: ${{ secrets.access-token }}
+    secrets: inherit
     with:
-        path: ${{ matrix.path }}
-        runName: before-${{ strategy.job-index }}
-        githubSha: ${{ github.event.pull_request.base.sha }}
+      path: ${{ matrix.path }}
+      runName: before-${{ strategy.job-index }}
+      githubSha: ${{ github.event.pull_request.base.sha }}
   after:
     name: After PR
     permissions:
@@ -32,9 +31,8 @@ jobs:
       matrix:
         path: ["pkg/controllers/provisioning/scheduling"]
     uses: ./.github/workflows/run-bench-test.yaml
-    secrets: 
-      github-access-token: ${{ secrets.access-token }}
+    secrets: inherit
     with:
-        path: ${{ matrix.path }}
-        runName: after-${{ strategy.job-index }}  
-        githubSha: ${{ github.sha }}
+      path: ${{ matrix.path }}
+      runName: after-${{ strategy.job-index }}  
+      githubSha: ${{ github.sha }}

