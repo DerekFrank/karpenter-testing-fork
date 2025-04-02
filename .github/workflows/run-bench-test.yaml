@@ -44,7 +44,6 @@ jobs:
           RESULTS: ${{ steps.test-run.outputs.OUTPUT }}
           UPLOAD: ${{ steps.artifact-upload.outputs.artifact-url }}
         with:
-          github-token: ${{ secrets.github-token }}
           script: |
               github.rest.issues.createComment({
                 issue_number: context.issue.number,
