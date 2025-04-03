@@ -98,6 +98,7 @@ var _ = BeforeEach(func() {
 	}
 	fakeClock.SetTime(time.Now())
 	state.PodSchedulingDecisionSeconds.Reset()
+	pscheduling.DefaultTerminationGracePeriod = nil
 })
 
 var _ = AfterSuite(func() {
@@ -220,6 +221,42 @@ var _ = Describe("Provisioning", func() {
 		Expect(len(nodes.Items)).To(Equal(1))
 		ExpectScheduled(ctx, env.Client, pod)
 	})
+	It("should expect nodeclaim terminationGracePeriod to be the global value when the nodepool terminationGracePeriod is not set", func() {
+		nodePool := test.NodePool()
+		pscheduling.DefaultTerminationGracePeriod = &metav1.Duration{Duration: 98 * time.Hour}
+		ExpectApplied(ctx, env.Client, nodePool)
+		pod := test.UnschedulablePod()
+		ExpectProvisioned(ctx, env.Client, cluster, cloudProvider, prov, pod)
+		ExpectScheduled(ctx, env.Client, pod)
+		nodeClaims := &v1.NodeClaimList{}
+		Expect(env.Client.List(ctx, nodeClaims)).To(Succeed())
+		Expect(len(nodeClaims.Items)).To(Equal(1))
+		Expect(nodeClaims.Items[0].Spec.TerminationGracePeriod.Duration).To(BeNumerically("==", 98*time.Hour))
+	})
+	It("should expect nodeclaim terminationGracePeriod to be the nil when the nodepool terminationGracePeriod and global terminationGracePeriod is not set", func() {
+		nodePool := test.NodePool()
+		ExpectApplied(ctx, env.Client, nodePool)
+		pod := test.UnschedulablePod()
+		ExpectProvisioned(ctx, env.Client, cluster, cloudProvider, prov, pod)
+		ExpectScheduled(ctx, env.Client, pod)
+		nodeClaims := &v1.NodeClaimList{}
+		Expect(env.Client.List(ctx, nodeClaims)).To(Succeed())
+		Expect(len(nodeClaims.Items)).To(Equal(1))
+		Expect(nodeClaims.Items[0].Spec.TerminationGracePeriod).To(BeNil())
+	})
+	It("should respect terminationGracePeriod value set on the nodePool over global terminationGracePeriod", func() {
+		nodePool := test.NodePool()
+		nodePool.Spec.Template.Spec.TerminationGracePeriod = &metav1.Duration{Duration: 223 * time.Hour}
+		pscheduling.DefaultTerminationGracePeriod = &metav1.Duration{Duration: 47 * time.Hour}
+		ExpectApplied(ctx, env.Client, nodePool)
+		pod := test.UnschedulablePod()
+		ExpectProvisioned(ctx, env.Client, cluster, cloudProvider, prov, pod)
+		ExpectScheduled(ctx, env.Client, pod)
+		nodeClaims := &v1.NodeClaimList{}
+		Expect(env.Client.List(ctx, nodeClaims)).To(Succeed())
+		Expect(len(nodeClaims.Items)).To(Equal(1))
+		Expect(nodeClaims.Items[0].Spec.TerminationGracePeriod.Duration).To(BeNumerically("==", 223*time.Hour))
+	})
 	It("should ignore NodePools that are deleting", func() {
 		nodePool := test.NodePool()
 		ExpectApplied(ctx, env.Client, nodePool)
@@ -244,6 +281,34 @@ var _ = Describe("Provisioning", func() {
 		Expect(cluster.PodSchedulingSuccessTime(nn).IsZero()).To(BeTrue())
 		Expect(cluster.PodSchedulingDecisionTime(nn).IsZero()).To(BeFalse())
 		ExpectMetricHistogramSampleCountValue("karpenter_pods_scheduling_decision_duration_seconds", 1, nil)
+	})
+	It("should mark podHealthyNodePoolScheduledTime if it is scheduled against a nodePool with NodeRegistrationHealthy=true", func() {
+		nodePool := test.NodePool()
+		nodePool.StatusConditions().SetTrue(v1.ConditionTypeNodeRegistrationHealthy)
+		nodePool.StatusConditions().SetTrue(v1.ConditionTypeValidationSucceeded)
+		nodePool.StatusConditions().SetTrue(v1.ConditionTypeNodeClassReady)
+		ExpectApplied(ctx, env.Client, nodePool)
+		pod := test.UnschedulablePod()
+		ExpectProvisioned(ctx, env.Client, cluster, cloudProvider, prov, pod)
+		nodes := &corev1.NodeList{}
+		Expect(env.Client.List(ctx, nodes)).To(Succeed())
+		Expect(len(nodes.Items)).To(Equal(1))
+		ExpectScheduled(ctx, env.Client, pod)
+		Expect(cluster.PodSchedulingSuccessTimeRegistrationHealthyCheck(client.ObjectKeyFromObject(pod)).IsZero()).To(BeFalse())
+	})
+	It("should not mark podHealthyNodePoolScheduledTime if it is scheduled against a nodePool with NodeRegistrationHealthy=False", func() {
+		nodePool := test.NodePool()
+		nodePool.StatusConditions().SetFalse(v1.ConditionTypeNodeRegistrationHealthy, "unhealthy", "unhealthy")
+		nodePool.StatusConditions().SetTrue(v1.ConditionTypeValidationSucceeded)
+		nodePool.StatusConditions().SetTrue(v1.ConditionTypeNodeClassReady)
+		ExpectApplied(ctx, env.Client, nodePool)
+		pod := test.UnschedulablePod()
+		ExpectProvisioned(ctx, env.Client, cluster, cloudProvider, prov, pod)
+		nodes := &corev1.NodeList{}
+		Expect(env.Client.List(ctx, nodes)).To(Succeed())
+		Expect(len(nodes.Items)).To(Equal(1))
+		ExpectScheduled(ctx, env.Client, pod)
+		Expect(cluster.PodSchedulingSuccessTimeRegistrationHealthyCheck(client.ObjectKeyFromObject(pod)).IsZero()).To(BeTrue())
 	})
 	It("should provision nodes for pods with supported node selectors", func() {
 		nodePool := test.NodePool()
@@ -598,12 +663,20 @@ var _ = Describe("Provisioning", func() {
 
 	Context("Resource Limits", func() {
 		It("should not schedule when limits are exceeded", func() {
-			ExpectApplied(ctx, env.Client, test.NodePool(v1.NodePool{
+			nodePool := test.NodePool(v1.NodePool{
 				Spec: v1.NodePoolSpec{
 					Limits: v1.Limits(corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("20")}),
 				},
-				Status: v1.NodePoolStatus{
-					Resources: corev1.ResourceList{
+			})
+			ExpectApplied(ctx, env.Client, nodePool)
+			cluster.UpdateNodeClaim(test.NodeClaim(v1.NodeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						v1.NodePoolLabelKey: nodePool.Name,
+					},
+				},
+				Status: v1.NodeClaimStatus{
+					Capacity: corev1.ResourceList{
 						corev1.ResourceCPU: resource.MustParse("100"),
 					},
 				},
@@ -760,6 +833,24 @@ var _ = Describe("Provisioning", func() {
 			allocatable := instanceTypeMap[node.Labels[corev1.LabelInstanceTypeStable]].Capacity
 			Expect(*allocatable.Cpu()).To(Equal(resource.MustParse("4")))
 			Expect(*allocatable.Memory()).To(Equal(resource.MustParse("4Gi")))
+		})
+		It("should account for daemonset hostports", func() {
+			ExpectApplied(ctx, env.Client, test.NodePool(), test.DaemonSet(
+				test.DaemonSetOptions{PodOptions: test.PodOptions{
+					ResourceRequirements: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2"), corev1.ResourceMemory: resource.MustParse("2Gi")}},
+					HostPorts:            []int32{8080},
+				}},
+			))
+			pod := test.UnschedulablePod(
+				test.PodOptions{
+					ResourceRequirements: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1"), corev1.ResourceMemory: resource.MustParse("1Gi")}},
+					HostPorts:            []int32{8080},
+				},
+			)
+			ExpectProvisioned(ctx, env.Client, cluster, cloudProvider, prov, pod)
+			// Expect that the host port will be blocked by a compatible daemonset
+			ExpectNotScheduled(ctx, env.Client, pod)
+			Expect(ExpectNodes(ctx, env.Client)).To(HaveLen(0))
 		})
 		It("should account for daemonsets (with startup taint)", func() {
 			nodePool := test.NodePool(v1.NodePool{
