@@ -29,10 +29,15 @@ var Node = v1.ResourceName("nodes")
 // RequestsForPods returns the total resources of a variadic list of podspecs.
 func RequestsForPods(pods ...*v1.Pod) v1.ResourceList {
 	var resources []v1.ResourceList
-	for _, pod := range pods {
-		resources = append(resources, Ceiling(pod).Requests)
+	var dest v1.ResourceList
+	for i, pod := range pods {
+		if i == 0 {
+			dest = Ceiling(pod).Requests.DeepCopy()
+		} else {
+			resources = append(resources, Ceiling(pod).Requests)
+		}
 	}
-	merged := Merge(resources...)
+	merged := MergeIntoVariadic(dest, resources...)
 	merged[v1.ResourcePods] = *resource.NewQuantity(int64(len(pods)), resource.DecimalExponent)
 	return merged
 }
@@ -43,7 +48,7 @@ func LimitsForPods(pods ...*v1.Pod) v1.ResourceList {
 	for _, pod := range pods {
 		resources = append(resources, Ceiling(pod).Limits)
 	}
-	merged := Merge(resources...)
+	merged := MergeIntoVariadic(resources[0], resources...)
 	merged[v1.ResourcePods] = *resource.NewQuantity(int64(len(pods)), resource.DecimalExponent)
 	return merged
 }
@@ -62,6 +67,13 @@ func Merge(resources ...v1.ResourceList) v1.ResourceList {
 		}
 	}
 	return result
+}
+
+func MergeIntoVariadic(dest v1.ResourceList, srcs ...v1.ResourceList) v1.ResourceList {
+	for _, resourceList := range srcs {
+		dest = MergeInto(dest, resourceList)
+	}
+	return dest
 }
 
 // MergeInto sums the resources from src into dest, modifying dest. If you need to repeatedly sum
