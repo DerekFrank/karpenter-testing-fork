@@ -407,7 +407,7 @@ var _ = Describe("Consolidation", func() {
 			Expect(metric.GetGauge().GetValue()).To(BeNumerically("==", 3))
 
 			// Execute command, thus deleting 3 nodes
-			ExpectSingletonReconciled(ctx, queue)
+			ExpectObjectReconciled(ctx, env.Client, queue, nodeClaims[0])
 			Expect(len(ExpectNodeClaims(ctx, env.Client))).To(Equal(7))
 		})
 		It("should allow all empty nodes to be disrupted", func() {
@@ -433,7 +433,7 @@ var _ = Describe("Consolidation", func() {
 			Expect(metric.GetGauge().GetValue()).To(BeNumerically("==", 10))
 
 			// Execute command, thus deleting all nodes
-			ExpectSingletonReconciled(ctx, queue)
+			ExpectObjectReconciled(ctx, env.Client, queue, nodeClaims[0])
 			Expect(len(ExpectNodeClaims(ctx, env.Client))).To(Equal(0))
 		})
 		It("should allow no empty nodes to be disrupted", func() {
@@ -453,7 +453,7 @@ var _ = Describe("Consolidation", func() {
 			Expect(metric.GetGauge().GetValue()).To(BeNumerically("==", 0))
 
 			// Execute command, thus deleting all nodes
-			ExpectSingletonReconciled(ctx, queue)
+			ExpectObjectReconciled(ctx, env.Client, queue, nodeClaims[0])
 			Expect(len(ExpectNodeClaims(ctx, env.Client))).To(Equal(numNodes))
 			Expect(numNodes).To(Equal(numNodes))
 		})
@@ -499,7 +499,7 @@ var _ = Describe("Consolidation", func() {
 			wg.Wait()
 
 			// Execute command, thus deleting 3 nodes
-			ExpectSingletonReconciled(ctx, queue)
+			ExpectObjectReconciled(ctx, env.Client, queue, nodeClaims[0])
 			Expect(len(ExpectNodeClaims(ctx, env.Client))).To(Equal(7))
 		})
 		It("should only allow 3 nodes to be deleted in single node consolidation delete", func() {
@@ -548,7 +548,7 @@ var _ = Describe("Consolidation", func() {
 
 			// Execute all commands in the queue, only deleting 3 nodes
 			for i := 0; i < 5; i++ {
-				ExpectSingletonReconciled(ctx, queue)
+				ExpectObjectReconciled(ctx, env.Client, queue, nodeClaims[i])
 			}
 			Expect(len(ExpectNodeClaims(ctx, env.Client))).To(Equal(7))
 		})

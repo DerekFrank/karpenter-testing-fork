@@ -171,12 +171,13 @@ var _ = Describe("Queue", func() {
 			ExpectMakeNodesAndNodeClaimsInitializedAndStateUpdated(ctx, env.Client, nodeStateController, nodeClaimStateController, []*corev1.Node{node1}, []*v1.NodeClaim{nodeClaim1})
 
 			stateNode := ExpectStateNodeExists(cluster, node1)
-			Expect(queue.Add(orchestration.NewCommand(replacements, []*state.StateNode{stateNode}, "", "test-method", "fake-type"))).To(BeNil())
+			cmd := orchestration.NewCommand(replacements, []*state.StateNode{stateNode}, "", "test-method", "fake-type")
+			Expect(queue.Add(cmd)).To(BeNil())
 
 			node1 = ExpectNodeExists(ctx, env.Client, node1.Name)
 			Expect(node1.Spec.Taints).To(ContainElement(v1.DisruptedNoScheduleTaint))
 
-			ExpectSingletonReconciled(ctx, queue)
+			ExpectObjectReconciled(ctx, env.Client, queue, stateNode.NodeClaim)
 
 			// Update state
 			ExpectReconcileSucceeded(ctx, nodeStateController, client.ObjectKeyFromObject(node1))
@@ -190,7 +191,7 @@ var _ = Describe("Queue", func() {
 			stateNode := ExpectStateNodeExistsForNodeClaim(cluster, nodeClaim1)
 
 			Expect(queue.Add(orchestration.NewCommand(replacements, []*state.StateNode{stateNode}, "", "test-method", "fake-type"))).To(BeNil())
-			ExpectSingletonReconciled(ctx, queue)
+			ExpectObjectReconciled(ctx, env.Client, queue, stateNode.NodeClaim)
 		})
 		It("should untaint nodes when a command times out", func() {
 			ExpectApplied(ctx, env.Client, nodeClaim1, node1, nodePool)
@@ -202,7 +203,7 @@ var _ = Describe("Queue", func() {
 			// Step the clock to trigger the timeout.
 			fakeClock.Step(11 * time.Minute)
 
-			ExpectSingletonReconciled(ctx, queue)
+			ExpectObjectReconciled(ctx, env.Client, queue, stateNode.NodeClaim)
 			node1 = ExpectNodeExists(ctx, env.Client, node1.Name)
 			Expect(node1.Spec.Taints).ToNot(ContainElement(v1.DisruptedNoScheduleTaint))
 		})
@@ -213,7 +214,7 @@ var _ = Describe("Queue", func() {
 
 			cmd := orchestration.NewCommand(replacements, []*state.StateNode{stateNode}, "", "test-method", "fake-type")
 			Expect(queue.Add(cmd)).To(BeNil())
-			ExpectSingletonReconciled(ctx, queue)
+			ExpectObjectReconciled(ctx, env.Client, queue, stateNode.NodeClaim)
 
 			// Get the command
 			Expect(cmd.Replacements[0].Initialized).To(BeFalse())
@@ -224,7 +225,7 @@ var _ = Describe("Queue", func() {
 			ExpectMakeNodesAndNodeClaimsInitializedAndStateUpdated(ctx, env.Client, nodeStateController, nodeClaimStateController,
 				[]*corev1.Node{replacementNode}, []*v1.NodeClaim{replacementNodeClaim})
 
-			ExpectSingletonReconciled(ctx, queue)
+			ExpectObjectReconciled(ctx, env.Client, queue, stateNode.NodeClaim)
 			Expect(cmd.Replacements[0].Initialized).To(BeTrue())
 
 			terminatingEvents := disruptionevents.Terminating(node1, nodeClaim1, cmd.Reason())
@@ -251,14 +252,14 @@ var _ = Describe("Queue", func() {
 			cmd := orchestration.NewCommand(replacements, []*state.StateNode{stateNode}, "", "test-method", "fake-type")
 			Expect(queue.Add(cmd)).To(BeNil())
 
-			ExpectSingletonReconciled(ctx, queue)
+			ExpectObjectReconciled(ctx, env.Client, queue, stateNode.NodeClaim)
 			Expect(cmd.Replacements[0].Initialized).To(BeFalse())
 			Expect(recorder.DetectedEvent(disruptionevents.WaitingOnReadiness(nodeClaim1).Message)).To(BeTrue())
 			Expect(cmd.Replacements[1].Initialized).To(BeFalse())
 
 			ExpectMakeNodesAndNodeClaimsInitializedAndStateUpdated(ctx, env.Client, nodeStateController, nodeClaimStateController, []*corev1.Node{replacementNode}, []*v1.NodeClaim{replacementNodeClaim})
 
-			ExpectSingletonReconciled(ctx, queue)
+			ExpectObjectReconciled(ctx, env.Client, queue, stateNode.NodeClaim)
 			Expect(cmd.Replacements[0].Initialized).To(BeTrue())
 			Expect(cmd.Replacements[1].Initialized).To(BeFalse())
 			Expect(recorder.DetectedEvent(disruptionevents.WaitingOnReadiness(nodeClaim1).Message)).To(BeTrue())

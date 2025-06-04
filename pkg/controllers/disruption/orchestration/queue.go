@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/awslabs/operatorpkg/reasonable"
 	"github.com/awslabs/operatorpkg/serrors"
-	"github.com/awslabs/operatorpkg/singleton"
 	"github.com/samber/lo"
 	"go.uber.org/multierr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -36,9 +36,13 @@ import (
 	"k8s.io/utils/clock"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	v1 "sigs.k8s.io/karpenter/pkg/apis/v1"
 	disruptionevents "sigs.k8s.io/karpenter/pkg/controllers/disruption/events"
@@ -57,6 +61,10 @@ const (
 )
 
 type Command struct {
+	// We need a k8s object to represent each command
+	// This approach assumes that no node will be in the disruption queue twice.
+	KeyNodeClaim 	  *v1.NodeClaim
+
 	Replacements      []Replacement
 	candidates        []*state.StateNode
 	timeAdded         time.Time           // timeAdded is used to track timeouts
@@ -132,10 +140,10 @@ func IsUnrecoverableError(err error) bool {
 }
 
 type Queue struct {
-	workqueue.TypedRateLimitingInterface[*Command]
+	sync.RWMutex
 
-	mu                  sync.RWMutex
-	providerIDToCommand map[string]*Command // providerID -> command, maps a candidate to its command
+	source chan event.TypedGenericEvent[*v1.NodeClaim]
+	nodeClaimToCommand map[client.ObjectKey]*Command // providerID -> command, maps a candidate to its command
 
 	kubeClient  client.Client
 	recorder    events.Recorder
@@ -151,12 +159,8 @@ func NewQueue(kubeClient client.Client, recorder events.Recorder, cluster *state
 	queue := &Queue{
 		// nolint:staticcheck
 		// We need to implement a deprecated interface since Command currently doesn't implement "comparable"
-		TypedRateLimitingInterface: workqueue.NewTypedRateLimitingQueueWithConfig(
-			workqueue.NewTypedItemExponentialFailureRateLimiter[*Command](queueBaseDelay, queueMaxDelay),
-			workqueue.TypedRateLimitingQueueConfig[*Command]{
-				Name: "disruption.workqueue",
-			}),
-		providerIDToCommand: map[string]*Command{},
+		source:     make(chan event.TypedGenericEvent[*v1.NodeClaim], 10000),
+		nodeClaimToCommand: map[client.ObjectKey]*Command{},
 		kubeClient:          kubeClient,
 		recorder:            recorder,
 		cluster:             cluster,
@@ -168,7 +172,10 @@ func NewQueue(kubeClient client.Client, recorder events.Recorder, cluster *state
 
 // NewCommand creates a command key and adds in initial data for the orchestration queue.
 func NewCommand(replacements []string, candidates []*state.StateNode, id types.UID, reason v1.DisruptionReason, consolidationType string) *Command {
-	return &Command{
+	cmd := &Command{
+		// For now we are using the first candidate in a list of candidates to represent the command
+		// This only works if a given node is only ever in the queue once.
+		KeyNodeClaim: candidates[0].NodeClaim,
 		Replacements: lo.Map(replacements, func(name string, _ int) Replacement {
 			return Replacement{name: name}
 		}),
@@ -177,30 +184,24 @@ func NewCommand(replacements []string, candidates []*state.StateNode, id types.U
 		consolidationType: consolidationType,
 		id:                id,
 	}
+	return cmd
 }
 
 func (q *Queue) Register(_ context.Context, m manager.Manager) error {
 	return controllerruntime.NewControllerManagedBy(m).
 		Named("disruption.queue").
-		WatchesRawSource(singleton.Source()).
-		Complete(singleton.AsReconciler(q))
+		WatchesRawSource(source.Channel(q.source, &handler.TypedEnqueueRequestForObject[*v1.NodeClaim]{})).
+		WithOptions(controller.Options{
+			RateLimiter:             reasonable.RateLimiter(),
+			MaxConcurrentReconciles: 100,
+		}).
+		Complete(reconcile.AsReconciler(m.GetClient(), q))
 }
 
-func (q *Queue) Reconcile(ctx context.Context) (reconcile.Result, error) {
+func (q *Queue) Reconcile(ctx context.Context, nodeClaim *v1.NodeClaim) (reconcile.Result, error) {
 	ctx = injection.WithControllerName(ctx, "disruption.queue")
+	cmd := q.nodeClaimToCommand[client.ObjectKeyFromObject(nodeClaim)]
 
-	// Check if the queue is empty. client-go recommends not using this function to gate the subsequent
-	// get call, but since we're popping items off the queue synchronously retrying, there should be
-	// no synchonization issues.
-	if q.Len() == 0 {
-		return reconcile.Result{RequeueAfter: 1 * time.Second}, nil
-	}
-
-	// Get command from queue. This waits until queue is non-empty.
-	cmd, shutdown := q.TypedRateLimitingInterface.Get()
-	if shutdown {
-		panic("unexpected failure, disruption queue has shut down")
-	}
 	ctx = log.IntoContext(ctx, log.FromContext(ctx).WithValues(cmd.LogValues()...))
 
 	if err := q.waitOrTerminate(ctx, cmd); err != nil {
@@ -208,10 +209,7 @@ func (q *Queue) Reconcile(ctx context.Context) (reconcile.Result, error) {
 		if !IsUnrecoverableError(err) {
 			// store the error that is causing us to fail, so we can bubble it up later if this times out.
 			cmd.lastError = err
-			// mark this item as done processing. This is necessary so that the RLI is able to add the item back in.
-			q.TypedRateLimitingInterface.Done(cmd)
-			q.TypedRateLimitingInterface.AddRateLimited(cmd)
-			return reconcile.Result{RequeueAfter: singleton.RequeueImmediately}, nil
+			return reconcile.Result{Requeue: true}, nil
 		}
 		// If the command failed, bail on the action.
 		// 1. Emit metrics for launch failures
@@ -235,7 +233,7 @@ func (q *Queue) Reconcile(ctx context.Context) (reconcile.Result, error) {
 	// If command is complete, remove command from queue.
 	q.Remove(cmd)
 	log.FromContext(ctx).V(1).Info("command succeeded")
-	return reconcile.Result{RequeueAfter: singleton.RequeueImmediately}, nil
+	return reconcile.Result{}, nil
 }
 
 // waitOrTerminate will wait until launched nodeclaims are ready.
@@ -307,32 +305,26 @@ func (q *Queue) waitOrTerminate(ctx context.Context, cmd *Command) error {
 // Add adds commands to the Queue
 // Each command added to the queue should already be validated and ready for execution.
 func (q *Queue) Add(cmd *Command) error {
-	providerIDs := lo.Map(cmd.candidates, func(s *state.StateNode, _ int) string {
-		return s.ProviderID()
-	})
 	// First check if we can add the command.
-	if q.HasAny(providerIDs...) {
+	if q.HasAny(cmd.candidates...) {
 		return fmt.Errorf("candidate is being disrupted")
 	}
 
 	cmd.timeAdded = q.clock.Now()
-	q.mu.Lock()
-	for _, candidate := range cmd.candidates {
-		q.providerIDToCommand[candidate.ProviderID()] = cmd
-	}
-	q.mu.Unlock()
-	q.TypedRateLimitingInterface.Add(cmd)
+	q.Lock()
+	defer q.Unlock()
+	q.nodeClaimToCommand[client.ObjectKeyFromObject(cmd.KeyNodeClaim)] = cmd
 	return nil
 }
 
 // HasAny checks to see if the candidate is part of an currently executing command.
-func (q *Queue) HasAny(ids ...string) bool {
-	q.mu.RLock()
-	defer q.mu.RUnlock()
+func (q *Queue) HasAny(candidates ...*state.StateNode) bool {
+	q.RLock()
+	defer q.RUnlock()
 
 	// If the mapping has at least one of the candidates' providerIDs, return true.
-	_, ok := lo.Find(ids, func(id string) bool {
-		_, ok := q.providerIDToCommand[id]
+	_, ok := lo.Find(candidates, func(n *state.StateNode) bool {
+		_, ok := q.nodeClaimToCommand[client.ObjectKeyFromObject(n.NodeClaim)]
 		return ok
 	})
 	return ok
@@ -341,19 +333,15 @@ func (q *Queue) HasAny(ids ...string) bool {
 // Remove fully clears the queue of all references of a hash/command
 func (q *Queue) Remove(cmd *Command) {
 	// mark this item as done processing. This is necessary so that the RLI is able to add the item back in.
-	q.TypedRateLimitingInterface.Done(cmd)
-	q.TypedRateLimitingInterface.Forget(cmd)
 	q.cluster.UnmarkForDeletion(lo.Map(cmd.candidates, func(s *state.StateNode, _ int) string { return s.ProviderID() })...)
 	// Remove all candidates linked to the command
-	q.mu.Lock()
-	for _, candidate := range cmd.candidates {
-		delete(q.providerIDToCommand, candidate.ProviderID())
-	}
-	q.mu.Unlock()
+	q.Lock()
+	defer q.Unlock()
+	delete(q.nodeClaimToCommand, client.ObjectKeyFromObject(cmd.KeyNodeClaim))
 }
 
 func (q *Queue) IsEmpty() bool {
-	q.mu.RLock()
-	defer q.mu.RUnlock()
-	return len(q.providerIDToCommand) == 0
+	q.RLock()
+	defer q.RUnlock()
+	return len(q.nodeClaimToCommand) == 0
 }
