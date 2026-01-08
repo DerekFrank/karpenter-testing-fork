@@ -122,11 +122,11 @@ type StateNode struct {
 
 	// daemonSetRequests is the total amount of resources that have been requested by daemon sets. This allows users
 	// of the Node to identify the remaining resources that we expect future daemonsets to consume.
-	daemonSetRequests map[types.NamespacedName]corev1.ResourceList
-	daemonSetLimits   map[types.NamespacedName]corev1.ResourceList
+	daemonSetRequests map[types.UID]corev1.ResourceList
+	daemonSetLimits   map[types.UID]corev1.ResourceList
 
-	podRequests map[types.NamespacedName]corev1.ResourceList
-	podLimits   map[types.NamespacedName]corev1.ResourceList
+	podRequests map[types.UID]corev1.ResourceList
+	podLimits   map[types.UID]corev1.ResourceList
 
 	hostPortUsage *scheduling.HostPortUsage
 	volumeUsage   *scheduling.VolumeUsage
@@ -139,10 +139,10 @@ type StateNode struct {
 
 func NewNode() *StateNode {
 	return &StateNode{
-		daemonSetRequests: map[types.NamespacedName]corev1.ResourceList{},
-		daemonSetLimits:   map[types.NamespacedName]corev1.ResourceList{},
-		podRequests:       map[types.NamespacedName]corev1.ResourceList{},
-		podLimits:         map[types.NamespacedName]corev1.ResourceList{},
+		daemonSetRequests: map[types.UID]corev1.ResourceList{},
+		daemonSetLimits:   map[types.UID]corev1.ResourceList{},
+		podRequests:       map[types.UID]corev1.ResourceList{},
+		podLimits:         map[types.UID]corev1.ResourceList{},
 		hostPortUsage:     scheduling.NewHostPortUsage(),
 		volumeUsage:       scheduling.NewVolumeUsage(),
 	}
@@ -441,7 +441,7 @@ func (in *StateNode) Managed() bool {
 }
 
 func (in *StateNode) updateForPod(ctx context.Context, kubeClient client.Client, pod *corev1.Pod) error {
-	podKey := client.ObjectKeyFromObject(pod)
+	podKey := pod.UID
 	hostPorts := scheduling.GetHostPorts(pod)
 	volumes, err := scheduling.GetVolumes(ctx, kubeClient, pod)
 	if err != nil {
@@ -459,7 +459,7 @@ func (in *StateNode) updateForPod(ctx context.Context, kubeClient client.Client,
 	return nil
 }
 
-func (in *StateNode) cleanupForPod(podKey types.NamespacedName) {
+func (in *StateNode) cleanupForPod(podKey types.UID) {
 	in.hostPortUsage.DeletePod(podKey)
 	in.volumeUsage.DeletePod(podKey)
 	delete(in.podRequests, podKey)

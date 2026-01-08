@@ -58,20 +58,20 @@ type Cluster struct {
 	hasSynced     atomic.Bool
 
 	mu                        sync.RWMutex
-	nodes                     map[string]*StateNode           // provider id -> cached node
-	bindings                  map[types.NamespacedName]string // pod namespaced named -> node name
-	nodeNameToProviderID      map[string]string               // node name -> provider id
-	nodeClaimNameToProviderID map[string]string               // node claim name -> provider id
-	nodePoolResources         map[string]corev1.ResourceList  // node pool name -> resource list
-	daemonSetPods             sync.Map                        // daemonSet -> existing pod
+	nodes                     map[string]*StateNode          // provider id -> cached node
+	bindings                  map[types.UID]string           // pod UID -> node name
+	nodeNameToProviderID      map[string]string              // node name -> provider id
+	nodeClaimNameToProviderID map[string]string              // node claim name -> provider id
+	nodePoolResources         map[string]corev1.ResourceList // node pool name -> resource list
+	daemonSetPods             sync.Map                       // daemonSet -> existing pod
 
 	NodePoolState *NodePoolState
 
-	podAcks                         sync.Map // pod namespaced name -> time when Karpenter first saw the pod as pending
-	podsSchedulingAttempted         sync.Map // pod namespaced name -> time when Karpenter tried to schedule a pod
-	podsSchedulableTimes            sync.Map // pod namespaced name -> time when it was first marked as able to fit to a node
-	podHealthyNodePoolScheduledTime sync.Map // pod namespaced name -> time when pod scheduled to a nodePool that has NodeRegistrationHealthy=true, is marked as able to fit to a node
-	podToNodeClaim                  sync.Map // pod namespaced name -> nodeClaim name
+	podAcks                         sync.Map // pod UID -> time when Karpenter first saw the pod as pending
+	podsSchedulingAttempted         sync.Map // pod UID -> time when Karpenter tried to schedule a pod
+	podsSchedulableTimes            sync.Map // pod UID -> time when it was first marked as able to fit to a node
+	podHealthyNodePoolScheduledTime sync.Map // pod UID -> time when pod scheduled to a nodePool that has NodeRegistrationHealthy=true, is marked as able to fit to a node
+	podToNodeClaim                  sync.Map // pod UID -> nodeClaim name
 
 	clusterStateMu sync.RWMutex // Separate mutex as this is called in some places that mu is held
 	// A monotonically increasing timestamp representing the time state of the
@@ -84,7 +84,7 @@ type Cluster struct {
 	unsyncedTimeMu      sync.Mutex
 	unsyncedStartTime   time.Time
 	lastUnsyncedLogTime time.Time
-	antiAffinityPods    sync.Map // pod namespaced name -> *corev1.Pod of pods that have required anti affinities
+	antiAffinityPods    sync.Map // pod UID -> *corev1.Pod of pods that have required anti affinities
 }
 
 func NewCluster(clk clock.Clock, client client.Client, cloudProvider cloudprovider.CloudProvider) *Cluster {
@@ -93,7 +93,7 @@ func NewCluster(clk clock.Clock, client client.Client, cloudProvider cloudprovid
 		kubeClient:                client,
 		cloudProvider:             cloudProvider,
 		nodes:                     map[string]*StateNode{},
-		bindings:                  map[types.NamespacedName]string{},
+		bindings:                  map[types.UID]string{},
 		daemonSetPods:             sync.Map{},
 		nodeNameToProviderID:      map[string]string{},
 		nodeClaimNameToProviderID: map[string]string{},
@@ -217,7 +217,7 @@ func (c *Cluster) ForPodsWithAntiAffinity(fn func(p *corev1.Pod, n *corev1.Node)
 		pod := value.(*corev1.Pod)
 		c.mu.RLock()
 		defer c.mu.RUnlock()
-		nodeName, ok := c.bindings[client.ObjectKeyFromObject(pod)]
+		nodeName, ok := c.bindings[pod.UID]
 		if !ok {
 			return true
 		}
@@ -385,7 +385,7 @@ func (c *Cluster) UpdatePod(ctx context.Context, pod *corev1.Pod) error {
 
 	var err error
 	if podutils.IsTerminal(pod) {
-		c.updateNodeUsageFromPodCompletion(client.ObjectKeyFromObject(pod))
+		c.updateNodeUsageFromPodCompletion(pod.UID)
 	} else {
 		err = c.updateNodeUsageFromPod(ctx, pod)
 	}
@@ -406,12 +406,12 @@ func (c *Cluster) AckPods(pods ...*corev1.Pod) {
 	now := c.clock.Now()
 	for _, pod := range pods {
 		// store the value as now only if it doesn't exist.
-		c.podAcks.LoadOrStore(types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, now)
+		c.podAcks.LoadOrStore(pod.UID, now)
 	}
 }
 
 // PodAckTime will return the time the pod was first seen in our cache.
-func (c *Cluster) PodAckTime(podKey types.NamespacedName) time.Time {
+func (c *Cluster) PodAckTime(podKey types.UID) time.Time {
 	if ackTime, ok := c.podAcks.Load(podKey); ok {
 		return ackTime.(time.Time)
 	}
@@ -425,19 +425,19 @@ func (c *Cluster) PodAckTime(podKey types.NamespacedName) time.Time {
 func (c *Cluster) MarkPodSchedulingDecisions(ctx context.Context, podErrors map[*corev1.Pod]error, npPods map[string][]*corev1.Pod, ncPods map[string][]*corev1.Pod) {
 	now := c.clock.Now()
 	for pod := range podErrors {
-		nn := client.ObjectKeyFromObject(pod)
+		podKey := pod.UID
 		// delete podsSchedulableTimes and podHealthyNodePoolScheduledTime for pods that have pod errors
-		c.podsSchedulableTimes.Delete(nn)
-		_, alreadyExists := c.podsSchedulingAttempted.LoadOrStore(nn, now)
+		c.podsSchedulableTimes.Delete(podKey)
+		_, alreadyExists := c.podsSchedulingAttempted.LoadOrStore(podKey, now)
 		// If we already attempted this, we don't need to emit another metric.
 		if !alreadyExists {
 			// We should have ACK'd the pod.
-			if ackTime := c.PodAckTime(nn); !ackTime.IsZero() {
+			if ackTime := c.PodAckTime(podKey); !ackTime.IsZero() {
 				PodSchedulingDecisionSeconds.Observe(c.clock.Since(ackTime).Seconds(), nil)
 			}
 		}
-		c.podHealthyNodePoolScheduledTime.Delete(nn)
-		c.podToNodeClaim.Delete(nn)
+		c.podHealthyNodePoolScheduledTime.Delete(podKey)
+		c.podToNodeClaim.Delete(podKey)
 	}
 	for nodePoolName, pods := range npPods {
 		nodePool := &v1.NodePool{}
@@ -446,24 +446,24 @@ func (c *Cluster) MarkPodSchedulingDecisions(ctx context.Context, podErrors map[
 			_ = c.kubeClient.Get(ctx, types.NamespacedName{Name: nodePoolName}, nodePool)
 		}
 		for _, p := range pods {
-			nn := client.ObjectKeyFromObject(p)
-			c.podsSchedulableTimes.LoadOrStore(nn, now)
-			_, alreadyExists := c.podsSchedulingAttempted.LoadOrStore(nn, now)
+			podKey := p.UID
+			c.podsSchedulableTimes.LoadOrStore(podKey, now)
+			_, alreadyExists := c.podsSchedulingAttempted.LoadOrStore(podKey, now)
 			// If we already attempted this, we don't need to emit another metric.
 			if !alreadyExists {
 				// We should have ACK'd the pod.
-				if ackTime := c.PodAckTime(nn); !ackTime.IsZero() {
+				if ackTime := c.PodAckTime(podKey); !ackTime.IsZero() {
 					PodSchedulingDecisionSeconds.Observe(c.clock.Since(ackTime).Seconds(), nil)
 				}
 			}
 			// If the pod is scheduled to a nodePool and if the nodePool has NodeRegistrationHealthy=true
 			// then mark the time when we thought it can schedule to now.
 			if nodePoolName != "" && nodePool.StatusConditions().IsTrue(v1.ConditionTypeNodeRegistrationHealthy) {
-				c.podHealthyNodePoolScheduledTime.LoadOrStore(nn, c.clock.Now())
+				c.podHealthyNodePoolScheduledTime.LoadOrStore(podKey, c.clock.Now())
 			} else {
 				// If the pod was scheduled to a healthy nodePool earlier but is now getting scheduled to an
 				// unhealthy one then we need to delete its entry from the map because it will not schedule successfully
-				c.podHealthyNodePoolScheduledTime.Delete(nn)
+				c.podHealthyNodePoolScheduledTime.Delete(podKey)
 			}
 		}
 	}
@@ -473,14 +473,14 @@ func (c *Cluster) MarkPodSchedulingDecisions(ctx context.Context, podErrors map[
 func (c *Cluster) UpdatePodToNodeClaimMapping(ncPods map[string][]*corev1.Pod) {
 	for ncName, pods := range ncPods {
 		for _, p := range pods {
-			c.podToNodeClaim.Store(client.ObjectKeyFromObject(p), ncName)
+			c.podToNodeClaim.Store(p.UID, ncName)
 		}
 	}
 }
 
 // PodSchedulingDecisionTime returns when Karpenter first decided if a pod could schedule a pod in scheduling simulations.
 // This returns 0, false if Karpenter never made a decision on the pod.
-func (c *Cluster) PodSchedulingDecisionTime(podKey types.NamespacedName) time.Time {
+func (c *Cluster) PodSchedulingDecisionTime(podKey types.UID) time.Time {
 	if val, found := c.podsSchedulingAttempted.Load(podKey); found {
 		return val.(time.Time)
 	}
@@ -489,7 +489,7 @@ func (c *Cluster) PodSchedulingDecisionTime(podKey types.NamespacedName) time.Ti
 
 // PodSchedulingSuccessTime returns when Karpenter first thought it could schedule a pod in its scheduling simulation.
 // This returns 0, false if the pod was never considered in scheduling as a pending pod.
-func (c *Cluster) PodSchedulingSuccessTime(podKey types.NamespacedName) time.Time {
+func (c *Cluster) PodSchedulingSuccessTime(podKey types.UID) time.Time {
 	if val, found := c.podsSchedulableTimes.Load(podKey); found {
 		return val.(time.Time)
 	}
@@ -497,7 +497,7 @@ func (c *Cluster) PodSchedulingSuccessTime(podKey types.NamespacedName) time.Tim
 }
 
 // PodNodeClaimMapping returns the nodeClaim against which the pod is simulated to get scheduled
-func (c *Cluster) PodNodeClaimMapping(podKey types.NamespacedName) string {
+func (c *Cluster) PodNodeClaimMapping(podKey types.UID) string {
 	if val, found := c.podToNodeClaim.Load(podKey); found {
 		return val.(string)
 	}
@@ -506,14 +506,14 @@ func (c *Cluster) PodNodeClaimMapping(podKey types.NamespacedName) string {
 
 // PodSchedulingSuccessTimeRegistrationHealthyCheck returns when Karpenter first thought it could schedule a pod in its scheduling simulation.
 // This returns 0, false if the pod was never considered in scheduling as a pending pod.
-func (c *Cluster) PodSchedulingSuccessTimeRegistrationHealthyCheck(podKey types.NamespacedName) time.Time {
+func (c *Cluster) PodSchedulingSuccessTimeRegistrationHealthyCheck(podKey types.UID) time.Time {
 	if val, found := c.podHealthyNodePoolScheduledTime.Load(podKey); found {
 		return val.(time.Time)
 	}
 	return time.Time{}
 }
 
-func (c *Cluster) DeletePod(podKey types.NamespacedName) {
+func (c *Cluster) DeletePod(podKey types.UID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -523,7 +523,7 @@ func (c *Cluster) DeletePod(podKey types.NamespacedName) {
 	c.MarkUnconsolidated()
 }
 
-func (c *Cluster) ClearPodSchedulingMappings(podKey types.NamespacedName) {
+func (c *Cluster) ClearPodSchedulingMappings(podKey types.UID) {
 	c.podAcks.Delete(podKey)
 	c.podsSchedulableTimes.Delete(podKey)
 	c.podsSchedulingAttempted.Delete(podKey)
@@ -584,7 +584,7 @@ func (c *Cluster) Reset() {
 	c.nodeClaimNameToProviderID = map[string]string{}
 	c.NodePoolState.Reset()
 	c.nodePoolResources = map[string]corev1.ResourceList{}
-	c.bindings = map[types.NamespacedName]string{}
+	c.bindings = map[types.UID]string{}
 	c.antiAffinityPods = sync.Map{}
 	c.daemonSetPods = sync.Map{}
 	c.podAcks = sync.Map{}
@@ -600,7 +600,7 @@ func (c *Cluster) SetSynced(state bool) {
 }
 
 func (c *Cluster) GetDaemonSetPod(daemonset *appsv1.DaemonSet) *corev1.Pod {
-	if pod, ok := c.daemonSetPods.Load(client.ObjectKeyFromObject(daemonset)); ok {
+	if pod, ok := c.daemonSetPods.Load(daemonset.UID); ok {
 		return pod.(*corev1.Pod).DeepCopy()
 	}
 
@@ -625,12 +625,12 @@ func (c *Cluster) UpdateDaemonSet(ctx context.Context, daemonset *appsv1.DaemonS
 		}
 	}
 	if pod != nil {
-		c.daemonSetPods.Store(client.ObjectKeyFromObject(daemonset), pod.DeepCopy())
+		c.daemonSetPods.Store(daemonset.UID, pod.DeepCopy())
 	}
 	return nil
 }
 
-func (c *Cluster) DeleteDaemonSet(key types.NamespacedName) {
+func (c *Cluster) DeleteDaemonSet(key types.UID) {
 	c.daemonSetPods.Delete(key)
 }
 
@@ -694,10 +694,10 @@ func (c *Cluster) newStateFromNode(ctx context.Context, node *corev1.Node, oldNo
 	n := &StateNode{
 		Node:              node,
 		NodeClaim:         oldNode.NodeClaim,
-		daemonSetRequests: map[types.NamespacedName]corev1.ResourceList{},
-		daemonSetLimits:   map[types.NamespacedName]corev1.ResourceList{},
-		podRequests:       map[types.NamespacedName]corev1.ResourceList{},
-		podLimits:         map[types.NamespacedName]corev1.ResourceList{},
+		daemonSetRequests: map[types.UID]corev1.ResourceList{},
+		daemonSetLimits:   map[types.UID]corev1.ResourceList{},
+		podRequests:       map[types.UID]corev1.ResourceList{},
+		podLimits:         map[types.UID]corev1.ResourceList{},
 		hostPortUsage:     scheduling.NewHostPortUsage(),
 		volumeUsage:       scheduling.NewVolumeUsage(),
 		markedForDeletion: oldNode.markedForDeletion,
@@ -815,7 +815,7 @@ func (c *Cluster) populateResourceRequests(ctx context.Context, n *StateNode) er
 			return err
 		}
 		c.cleanupOldBindings(pod)
-		c.bindings[client.ObjectKeyFromObject(pod)] = pod.Spec.NodeName
+		c.bindings[pod.UID] = pod.Spec.NodeName
 	}
 	return nil
 }
@@ -837,11 +837,11 @@ func (c *Cluster) updateNodeUsageFromPod(ctx context.Context, pod *corev1.Pod) e
 		return err
 	}
 	c.cleanupOldBindings(pod)
-	c.bindings[client.ObjectKeyFromObject(pod)] = pod.Spec.NodeName
+	c.bindings[pod.UID] = pod.Spec.NodeName
 	return nil
 }
 
-func (c *Cluster) updateNodeUsageFromPodCompletion(podKey types.NamespacedName) {
+func (c *Cluster) updateNodeUsageFromPodCompletion(podKey types.UID) {
 	nodeName, bindingKnown := c.bindings[podKey]
 	if !bindingKnown {
 		// we didn't think the pod was bound, so we weren't tracking it and don't need to do anything
@@ -858,7 +858,7 @@ func (c *Cluster) updateNodeUsageFromPodCompletion(podKey types.NamespacedName) 
 }
 
 func (c *Cluster) cleanupOldBindings(pod *corev1.Pod) {
-	if oldNodeName, bindingKnown := c.bindings[client.ObjectKeyFromObject(pod)]; bindingKnown {
+	if oldNodeName, bindingKnown := c.bindings[pod.UID]; bindingKnown {
 		if oldNodeName == pod.Spec.NodeName {
 			// we are already tracking the pod binding, so nothing to update
 			return
@@ -867,8 +867,8 @@ func (c *Cluster) cleanupOldBindings(pod *corev1.Pod) {
 		// binding to a different node the second time
 		if oldNode, ok := c.nodes[c.nodeNameToProviderID[oldNodeName]]; ok {
 			// we were tracking the old node, so we need to reduce its capacity by the amount of the pod that left
-			oldNode.cleanupForPod(client.ObjectKeyFromObject(pod))
-			delete(c.bindings, client.ObjectKeyFromObject(pod))
+			oldNode.cleanupForPod(pod.UID)
+			delete(c.bindings, pod.UID)
 		}
 	}
 	// new pod binding has occurred
@@ -880,7 +880,7 @@ func (c *Cluster) updatePodAntiAffinities(pod *corev1.Pod) {
 	// required to enforce them so it just adds complexity for very little
 	// value. The problem with them comes from the relaxation process, the pod
 	// we are relaxing is not the pod with the anti-affinity term.
-	if podKey := client.ObjectKeyFromObject(pod); podutils.HasRequiredPodAntiAffinity(pod) {
+	if podKey := pod.UID; podutils.HasRequiredPodAntiAffinity(pod) {
 		c.antiAffinityPods.Store(podKey, pod)
 	} else {
 		c.antiAffinityPods.Delete(podKey)

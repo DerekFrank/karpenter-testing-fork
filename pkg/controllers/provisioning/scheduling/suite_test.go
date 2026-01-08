@@ -428,12 +428,12 @@ var _ = Context("Scheduling", func() {
 						test.PodOptions{NodeRequirements: []corev1.NodeSelectorRequirement{
 							{Key: label, Operator: corev1.NodeSelectorOpIn, Values: []string{"test"}},
 						}})
-					nn := client.ObjectKeyFromObject(pod)
+					podKey := pod.UID
 					cluster.AckPods(pod)
 					ExpectProvisioned(ctx, env.Client, cluster, cloudProvider, prov, pod)
 					ExpectNotScheduled(ctx, env.Client, pod)
-					Expect(cluster.PodSchedulingSuccessTime(nn).IsZero()).To(BeTrue())
-					Expect(cluster.PodSchedulingDecisionTime(nn).IsZero()).To(BeFalse())
+					Expect(cluster.PodSchedulingSuccessTime(podKey).IsZero()).To(BeTrue())
+					Expect(cluster.PodSchedulingDecisionTime(podKey).IsZero()).To(BeFalse())
 					ExpectMetricHistogramSampleCountValue("karpenter_pods_scheduling_decision_duration_seconds", 1, nil)
 				}
 			})

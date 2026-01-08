@@ -51,7 +51,7 @@ func (in *HostPortUsage) DeepCopyInto(out *HostPortUsage) {
 	*out = *in
 	if in.reserved != nil {
 		in, out := &in.reserved, &out.reserved
-		*out = make(map[types.NamespacedName][]HostPort, len(*in))
+		*out = make(map[types.UID][]HostPort, len(*in))
 		for key, val := range *in {
 			var outVal []HostPort
 			if val == nil {
@@ -139,7 +139,7 @@ func (in *VolumeUsage) DeepCopyInto(out *VolumeUsage) {
 	}
 	if in.podVolumes != nil {
 		in, out := &in.podVolumes, &out.podVolumes
-		*out = make(map[types.NamespacedName]Volumes, len(*in))
+		*out = make(map[types.UID]Volumes, len(*in))
 		for key, val := range *in {
 			var outVal map[string]sets.Set[string]
 			if val == nil {

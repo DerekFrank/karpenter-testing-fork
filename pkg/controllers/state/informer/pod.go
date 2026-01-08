@@ -64,7 +64,9 @@ func (c *PodController) Reconcile(ctx context.Context, req reconcile.Request) (r
 	if err := c.kubeClient.Get(ctx, req.NamespacedName, pod); err != nil {
 		if errors.IsNotFound(err) {
 			// notify cluster state of the node deletion
-			c.cluster.DeletePod(req.NamespacedName)
+			// NOTE: THIS DOESN'T WORK, NEED CLUSTER TO TRACK POD key -> UID for this to work
+			// TODO: Continue refactor
+			c.cluster.DeletePod(pod.UID)
 		}
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}

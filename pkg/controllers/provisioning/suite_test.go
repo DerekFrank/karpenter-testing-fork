@@ -294,12 +294,12 @@ var _ = Describe("Provisioning", func() {
 		ExpectDeletionTimestampSet(ctx, env.Client, nodePool)
 		pod := test.UnschedulablePod()
 		cluster.AckPods(pod)
-		nn := client.ObjectKeyFromObject(pod)
+		podKey := pod.UID
 		// Provisioning should fail here since there are no valid nodePools to schedule the pod
 		ExpectProvisioned(ctx, env.Client, cluster, cloudProvider, prov, pod)
 		ExpectNotScheduled(ctx, env.Client, pod)
-		Expect(cluster.PodSchedulingSuccessTime(nn).IsZero()).To(BeTrue())
-		Expect(cluster.PodSchedulingDecisionTime(nn).IsZero()).To(BeFalse())
+		Expect(cluster.PodSchedulingSuccessTime(podKey).IsZero()).To(BeTrue())
+		Expect(cluster.PodSchedulingDecisionTime(podKey).IsZero()).To(BeFalse())
 		ExpectMetricHistogramSampleCountValue("karpenter_pods_scheduling_decision_duration_seconds", 1, nil)
 	})
 	It("should mark podHealthyNodePoolScheduledTime if it is scheduled against a nodePool with NodeRegistrationHealthy=true", func() {
@@ -314,7 +314,7 @@ var _ = Describe("Provisioning", func() {
 		Expect(env.Client.List(ctx, nodes)).To(Succeed())
 		Expect(len(nodes.Items)).To(Equal(1))
 		ExpectScheduled(ctx, env.Client, pod)
-		Expect(cluster.PodSchedulingSuccessTimeRegistrationHealthyCheck(client.ObjectKeyFromObject(pod)).IsZero()).To(BeFalse())
+		Expect(cluster.PodSchedulingSuccessTimeRegistrationHealthyCheck(pod.UID).IsZero()).To(BeFalse())
 	})
 	It("should not mark podHealthyNodePoolScheduledTime if it is scheduled against a nodePool with NodeRegistrationHealthy=False", func() {
 		nodePool := test.NodePool()
@@ -328,7 +328,7 @@ var _ = Describe("Provisioning", func() {
 		Expect(env.Client.List(ctx, nodes)).To(Succeed())
 		Expect(len(nodes.Items)).To(Equal(1))
 		ExpectScheduled(ctx, env.Client, pod)
-		Expect(cluster.PodSchedulingSuccessTimeRegistrationHealthyCheck(client.ObjectKeyFromObject(pod)).IsZero()).To(BeTrue())
+		Expect(cluster.PodSchedulingSuccessTimeRegistrationHealthyCheck(pod.UID).IsZero()).To(BeTrue())
 	})
 	It("should provision nodes for pods with supported node selectors", func() {
 		nodePool := test.NodePool()
@@ -482,7 +482,7 @@ var _ = Describe("Provisioning", func() {
 
 		nodeClaim := &v1.NodeClaim{}
 		Expect(env.Client.Get(ctx, types.NamespacedName{Name: nodeClaims[0]}, nodeClaim)).To(Succeed())
-		Expect(cluster.PodNodeClaimMapping(client.ObjectKeyFromObject(pod))).To(BeEquivalentTo(nodeClaim.Name))
+		Expect(cluster.PodNodeClaimMapping(pod.UID)).To(BeEquivalentTo(nodeClaim.Name))
 
 		Expect(nodeClaim.Annotations).To(HaveKeyWithValue(v1.NodePoolHashAnnotationKey, hash))
 	})

@@ -43,7 +43,7 @@ func (in *StateNode) DeepCopyInto(out *StateNode) {
 	}
 	if in.daemonSetRequests != nil {
 		in, out := &in.daemonSetRequests, &out.daemonSetRequests
-		*out = make(map[types.NamespacedName]v1.ResourceList, len(*in))
+		*out = make(map[types.UID]v1.ResourceList, len(*in))
 		for key, val := range *in {
 			var outVal map[v1.ResourceName]resource.Quantity
 			if val == nil {
@@ -61,7 +61,7 @@ func (in *StateNode) DeepCopyInto(out *StateNode) {
 	}
 	if in.daemonSetLimits != nil {
 		in, out := &in.daemonSetLimits, &out.daemonSetLimits
-		*out = make(map[types.NamespacedName]v1.ResourceList, len(*in))
+		*out = make(map[types.UID]v1.ResourceList, len(*in))
 		for key, val := range *in {
 			var outVal map[v1.ResourceName]resource.Quantity
 			if val == nil {
@@ -79,7 +79,7 @@ func (in *StateNode) DeepCopyInto(out *StateNode) {
 	}
 	if in.podRequests != nil {
 		in, out := &in.podRequests, &out.podRequests
-		*out = make(map[types.NamespacedName]v1.ResourceList, len(*in))
+		*out = make(map[types.UID]v1.ResourceList, len(*in))
 		for key, val := range *in {
 			var outVal map[v1.ResourceName]resource.Quantity
 			if val == nil {
@@ -97,7 +97,7 @@ func (in *StateNode) DeepCopyInto(out *StateNode) {
 	}
 	if in.podLimits != nil {
 		in, out := &in.podLimits, &out.podLimits
-		*out = make(map[types.NamespacedName]v1.ResourceList, len(*in))
+		*out = make(map[types.UID]v1.ResourceList, len(*in))
 		for key, val := range *in {
 			var outVal map[v1.ResourceName]resource.Quantity
 			if val == nil {

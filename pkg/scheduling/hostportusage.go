@@ -23,7 +23,6 @@ import (
 	"github.com/awslabs/operatorpkg/serrors"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 //go:generate go tool -modfile=../../go.tools.mod controller-gen object:headerFile="../../hack/boilerplate.go.txt" paths="."
@@ -33,7 +32,7 @@ import (
 // together.
 // +k8s:deepcopy-gen=true
 type HostPortUsage struct {
-	reserved map[types.NamespacedName][]HostPort
+	reserved map[types.UID][]HostPort
 }
 
 // +k8s:deepcopy-gen=true
@@ -63,20 +62,20 @@ func (p HostPort) Matches(rhs HostPort) bool {
 
 func NewHostPortUsage() *HostPortUsage {
 	return &HostPortUsage{
-		reserved: map[types.NamespacedName][]HostPort{},
+		reserved: map[types.UID][]HostPort{},
 	}
 }
 
 // Add adds a port to the HostPortUsage
 func (u *HostPortUsage) Add(usedBy *v1.Pod, ports []HostPort) {
-	u.reserved[client.ObjectKeyFromObject(usedBy)] = ports
+	u.reserved[usedBy.UID] = ports
 }
 
 func (u *HostPortUsage) Conflicts(usedBy *v1.Pod, ports []HostPort) error {
 	for _, newEntry := range ports {
 		for podKey, entries := range u.reserved {
 			for _, existing := range entries {
-				if newEntry.Matches(existing) && podKey != client.ObjectKeyFromObject(usedBy) {
+				if newEntry.Matches(existing) && podKey != usedBy.UID {
 					return serrors.Wrap(fmt.Errorf("pod hostport conflicts with existing hostport configuration"), "pod-hostport-ip", newEntry.IP, "pod-hostport-port", newEntry.Port, "pod-hostport-protocol", newEntry.Protocol, "existing-hostport-ip", existing.IP, "existing-hostport-port", existing.Port, "existing-hostport-protocol", existing.Protocol)
 				}
 			}
@@ -86,7 +85,7 @@ func (u *HostPortUsage) Conflicts(usedBy *v1.Pod, ports []HostPort) error {
 }
 
 // DeletePod deletes all host port usage from the HostPortUsage that were created by the pod with the given name.
-func (u *HostPortUsage) DeletePod(key types.NamespacedName) {
+func (u *HostPortUsage) DeletePod(key types.UID) {
 	delete(u.reserved, key)
 }
 

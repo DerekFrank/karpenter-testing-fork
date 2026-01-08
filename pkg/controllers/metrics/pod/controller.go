@@ -253,7 +253,7 @@ func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	})
 	c.recordPodSchedulingUndecidedMetric(pod)
 	// Get the time for when we Karpenter first thought the pod was schedulable. This should be zero if we didn't simulate for this pod.
-	schedulableTime := c.cluster.PodSchedulingSuccessTime(types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace})
+	schedulableTime := c.cluster.PodSchedulingSuccessTime(pod.UID)
 	c.recordPodStartupMetric(pod, schedulableTime)
 	c.recordPodBoundMetric(pod, schedulableTime)
 	// Requeue every 30s for pods that are stuck without a state change
@@ -261,12 +261,12 @@ func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (reco
 }
 
 func (c *Controller) recordPodSchedulingUndecidedMetric(pod *corev1.Pod) {
-	nn := client.ObjectKeyFromObject(pod)
+	podKey := pod.UID
 	_, scheduled := lo.Find(pod.Status.Conditions, func(c corev1.PodCondition) bool {
 		return c.Type == corev1.PodScheduled && c.Status == corev1.ConditionTrue
 	})
 	// If we've made a decision on this pod or the pod is already bound, delete the metric idempotently and return
-	if decisionTime := c.cluster.PodSchedulingDecisionTime(nn); !decisionTime.IsZero() || scheduled {
+	if decisionTime := c.cluster.PodSchedulingDecisionTime(podKey); !decisionTime.IsZero() || scheduled {
 		PodSchedulingUndecidedTimeSeconds.Delete(map[string]string{
 			podName:      pod.Name,
 			podNamespace: pod.Namespace,
@@ -274,7 +274,7 @@ func (c *Controller) recordPodSchedulingUndecidedMetric(pod *corev1.Pod) {
 		return
 	}
 	// If we haven't made a decision, get the time that we ACK'd the pod and emit the metric based on that
-	if podAckTime := c.cluster.PodAckTime(nn); !podAckTime.IsZero() {
+	if podAckTime := c.cluster.PodAckTime(podKey); !podAckTime.IsZero() {
 		PodSchedulingUndecidedTimeSeconds.Set(time.Since(podAckTime).Seconds(), map[string]string{
 			podName:      pod.Name,
 			podNamespace: pod.Namespace,
@@ -325,7 +325,7 @@ func (c *Controller) recordPodStartupMetric(pod *corev1.Pod, schedulableTime tim
 			}
 			c.pendingPods.Delete(key)
 			// Clear cluster state's representation of these pods as we don't need to keep track of them anymore
-			c.cluster.ClearPodSchedulingMappings(client.ObjectKeyFromObject(pod))
+			c.cluster.ClearPodSchedulingMappings(pod.UID)
 		} else if podutils.IsTerminal(pod) {
 			// We do not emit the startup duration metric for pods that are terminal because such pods will have
 			// Ready status condition set to False which will cause the metric to take negative values.
@@ -341,7 +341,7 @@ func (c *Controller) recordPodStartupMetric(pod *corev1.Pod, schedulableTime tim
 			})
 			c.pendingPods.Delete(key)
 			// Clear cluster state's representation of these pods as we don't need to keep track of them anymore
-			c.cluster.ClearPodSchedulingMappings(client.ObjectKeyFromObject(pod))
+			c.cluster.ClearPodSchedulingMappings(pod.UID)
 		} else {
 			PodUnstartedTimeSeconds.Set(time.Since(pod.CreationTimestamp.Time).Seconds(), map[string]string{
 				podName:      pod.Name,

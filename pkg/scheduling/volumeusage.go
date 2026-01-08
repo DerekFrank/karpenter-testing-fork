@@ -186,14 +186,14 @@ func driverFromVolume(ctx context.Context, kubeClient client.Client, volumeName 
 // +k8s:deepcopy-gen=true
 type VolumeUsage struct {
 	volumes    Volumes
-	podVolumes map[types.NamespacedName]Volumes
+	podVolumes map[types.UID]Volumes
 	limits     map[string]int
 }
 
 func NewVolumeUsage() *VolumeUsage {
 	return &VolumeUsage{
 		volumes:    Volumes{},
-		podVolumes: map[types.NamespacedName]Volumes{},
+		podVolumes: map[types.UID]Volumes{},
 		limits:     map[string]int{},
 	}
 }
@@ -212,11 +212,11 @@ func (v *VolumeUsage) AddLimit(storageDriver string, value int) {
 }
 
 func (v *VolumeUsage) Add(pod *v1.Pod, volumes Volumes) {
-	v.podVolumes[client.ObjectKeyFromObject(pod)] = volumes
+	v.podVolumes[pod.UID] = volumes
 	v.volumes = v.volumes.Union(volumes)
 }
 
-func (v *VolumeUsage) DeletePod(key types.NamespacedName) {
+func (v *VolumeUsage) DeletePod(key types.UID) {
 	delete(v.podVolumes, key)
 	// volume names could be duplicated, so we re-create our volumes
 	v.volumes = Volumes{}
