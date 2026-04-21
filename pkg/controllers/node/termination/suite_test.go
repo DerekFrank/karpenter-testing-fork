@@ -614,7 +614,7 @@ var _ = Describe("Termination", func() {
 			ExpectApplied(ctx, env.Client, node, nodeClaim, pods[0], pods[1])
 
 			// Make Node NotReady since it's automatically marked as Ready on first deploy
-			ExpectMakeNodesNotReady(ctx, env.Client, node)
+			ExpectMakeNodesNotReady(ctx, env.Client, fakeClock, node)
 
 			// Trigger Termination Controller
 			Expect(env.Client.Delete(ctx, node)).To(Succeed())

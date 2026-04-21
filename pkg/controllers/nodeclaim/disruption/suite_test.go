@@ -126,14 +126,14 @@ var _ = Describe("Disruption", func() {
 		// set the lastPodEvent to 5 minutes in the past
 		nodeClaim.Status.LastPodEventTime.Time = fakeClock.Now().Add(-5 * time.Minute)
 		ExpectApplied(ctx, env.Client, nodeClaim)
-		ExpectMakeNodeClaimsInitialized(ctx, env.Client, nodeClaim)
+		ExpectMakeNodeClaimsInitialized(ctx, env.Client, fakeClock, nodeClaim)
 	})
 	It("should set multiple disruption conditions simultaneously", func() {
 		cp.Drifted = "drifted"
 		nodePool.Spec.Disruption.ConsolidationPolicy = v1.ConsolidationPolicyWhenEmpty
 		nodePool.Spec.Disruption.ConsolidateAfter = v1.MustParseNillableDuration("30s")
 		ExpectApplied(ctx, env.Client, nodePool, nodeClaim, node)
-		ExpectMakeNodeClaimsInitialized(ctx, env.Client, nodeClaim)
+		ExpectMakeNodeClaimsInitialized(ctx, env.Client, fakeClock, nodeClaim)
 
 		// step forward to make the node empty
 		fakeClock.Step(60 * time.Second)
@@ -157,13 +157,13 @@ var _ = Describe("Disruption", func() {
 		// set the lastPodEvent to 5 minutes in the past
 		nodeClaim.Status.LastPodEventTime.Time = fakeClock.Now().Add(-5 * time.Minute)
 		ExpectApplied(ctx, env.Client, nodeClaim)
-		ExpectMakeNodeClaimsInitialized(ctx, env.Client, nodeClaim)
+		ExpectMakeNodeClaimsInitialized(ctx, env.Client, fakeClock, nodeClaim)
 
 		cp.Drifted = "drifted"
 		nodePool.Spec.Disruption.ConsolidationPolicy = v1.ConsolidationPolicyWhenEmpty
 		nodePool.Spec.Disruption.ConsolidateAfter = v1.MustParseNillableDuration("30s")
 		ExpectApplied(ctx, env.Client, nodePool, nodeClaim, node)
-		ExpectMakeNodeClaimsInitialized(ctx, env.Client, nodeClaim)
+		ExpectMakeNodeClaimsInitialized(ctx, env.Client, fakeClock, nodeClaim)
 
 		// step forward to make the node empty
 		fakeClock.Step(60 * time.Second)
@@ -180,7 +180,7 @@ var _ = Describe("Disruption", func() {
 		nodeClaim.StatusConditions().SetTrue(v1.ConditionTypeConsolidatable)
 
 		ExpectApplied(ctx, env.Client, nodePool, nodeClaim, node)
-		ExpectMakeNodeClaimsInitialized(ctx, env.Client, nodeClaim)
+		ExpectMakeNodeClaimsInitialized(ctx, env.Client, fakeClock, nodeClaim)
 		ExpectObjectReconciled(ctx, env.Client, nodeClaimDisruptionController, nodeClaim)
 
 		nodeClaim = ExpectExists(ctx, env.Client, nodeClaim)

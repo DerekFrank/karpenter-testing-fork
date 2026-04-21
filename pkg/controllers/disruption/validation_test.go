@@ -184,7 +184,7 @@ func (t *TestConsolidationValidator) Validate(ctx context.Context, cmd disruptio
 
 func churn(nodes []*corev1.Node, nodeClaims []*v1.NodeClaim) {
 	var pods []*corev1.Pod
-	ExpectMakeNodesAndNodeClaimsInitializedAndStateUpdated(ctx, env.Client, nodeStateController, nodeClaimStateController, nodes, nodeClaims)
+	ExpectMakeNodesAndNodeClaimsInitializedAndStateUpdated(ctx, env.Client, nodeStateController, nodeClaimStateController, fakeClock, nodes, nodeClaims)
 	rs := test.ReplicaSet()
 	ExpectApplied(ctx, env.Client, rs)
 	pods = test.Pods(1, test.PodOptions{
@@ -213,7 +213,7 @@ func churn(nodes []*corev1.Node, nodeClaims []*v1.NodeClaim) {
 }
 
 func blockingBudget(nodes []*corev1.Node, nodeClaims []*v1.NodeClaim, nodePool *v1.NodePool) {
-	ExpectMakeNodesAndNodeClaimsInitializedAndStateUpdated(ctx, env.Client, nodeStateController, nodeClaimStateController, nodes, nodeClaims)
+	ExpectMakeNodesAndNodeClaimsInitializedAndStateUpdated(ctx, env.Client, nodeStateController, nodeClaimStateController, fakeClock, nodes, nodeClaims)
 	nodePool.Spec.Disruption.Budgets = []v1.Budget{{
 		Nodes: "0%",
 	}}
@@ -221,7 +221,7 @@ func blockingBudget(nodes []*corev1.Node, nodeClaims []*v1.NodeClaim, nodePool *
 }
 
 func nominated(nodes []*corev1.Node, nodeClaims []*v1.NodeClaim) {
-	ExpectMakeNodesAndNodeClaimsInitializedAndStateUpdated(ctx, env.Client, nodeStateController, nodeClaimStateController, nodes, nodeClaims)
+	ExpectMakeNodesAndNodeClaimsInitializedAndStateUpdated(ctx, env.Client, nodeStateController, nodeClaimStateController, fakeClock, nodes, nodeClaims)
 	for i := range nodes {
 		cluster.NominateNodeForPod(ctx, nodes[i].Spec.ProviderID)
 		cluster.NominateNodeForPod(ctx, nodes[i].Spec.ProviderID)

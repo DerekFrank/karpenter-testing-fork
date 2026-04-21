@@ -99,7 +99,7 @@ var _ = Describe("GarbageCollection", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Mark the node as NotReady after the launch
-		ExpectMakeNodesNotReady(ctx, env.Client, node)
+		ExpectMakeNodesNotReady(ctx, env.Client, fakeClock, node)
 
 		// Step forward to move past the cache eventual consistency timeout
 		fakeClock.SetTime(time.Now().Add(time.Second * 20))
@@ -157,7 +157,7 @@ var _ = Describe("GarbageCollection", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// Mark the node as NotReady after the launch
-			ExpectMakeNodesNotReady(ctx, env.Client, node)
+			ExpectMakeNodesNotReady(ctx, env.Client, fakeClock, node)
 		})
 
 		// Step forward to move past the cache eventual consistency timeout

@@ -1821,8 +1821,8 @@ var _ = Describe("Taints", func() {
 		})
 		It("should consider ephemeral taints on a managed node after the node is initialized", func() {
 			ExpectApplied(ctx, env.Client, nodeClaim, node)
-			ExpectMakeNodesInitialized(ctx, env.Client, node)
-			ExpectMakeNodeClaimsInitialized(ctx, env.Client, nodeClaim)
+			ExpectMakeNodesInitialized(ctx, env.Client, fakeClock, node)
+			ExpectMakeNodeClaimsInitialized(ctx, env.Client, fakeClock, nodeClaim)
 
 			node = ExpectExists(ctx, env.Client, node)
 			node.Spec.Taints = []corev1.Taint{
@@ -1871,8 +1871,8 @@ var _ = Describe("Taints", func() {
 				{Key: "taint-key2", Value: "taint-value2", Effect: corev1.TaintEffectNoExecute},
 			}
 			ExpectApplied(ctx, env.Client, nodeClaim, node)
-			ExpectMakeNodesInitialized(ctx, env.Client, node)
-			ExpectMakeNodeClaimsInitialized(ctx, env.Client, nodeClaim)
+			ExpectMakeNodesInitialized(ctx, env.Client, fakeClock, node)
+			ExpectMakeNodeClaimsInitialized(ctx, env.Client, fakeClock, nodeClaim)
 
 			ExpectReconcileSucceeded(ctx, nodeClaimController, client.ObjectKeyFromObject(nodeClaim))
 			ExpectReconcileSucceeded(ctx, nodeController, client.ObjectKeyFromObject(node))
@@ -1907,7 +1907,7 @@ var _ = Describe("Taints", func() {
 		})
 		It("should consider ephemeral taints on an unmanaged node after the node is initialized", func() {
 			ExpectApplied(ctx, env.Client, node)
-			ExpectMakeNodesInitialized(ctx, env.Client, node)
+			ExpectMakeNodesInitialized(ctx, env.Client, fakeClock, node)
 
 			node = ExpectExists(ctx, env.Client, node)
 			node.Spec.Taints = []corev1.Taint{
@@ -2904,8 +2904,8 @@ var _ = Describe("StateNode Capacity", func() {
 			},
 		})
 		ExpectApplied(ctx, env.Client, nodeClaim, node)
-		ExpectMakeNodesInitialized(ctx, env.Client, node)
-		ExpectMakeNodeClaimsInitialized(ctx, env.Client, nodeClaim)
+		ExpectMakeNodesInitialized(ctx, env.Client, fakeClock, node)
+		ExpectMakeNodeClaimsInitialized(ctx, env.Client, fakeClock, nodeClaim)
 		ExpectReconcileSucceeded(ctx, nodeClaimController, client.ObjectKeyFromObject(nodeClaim))
 		ExpectReconcileSucceeded(ctx, nodeController, client.ObjectKeyFromObject(node))
 

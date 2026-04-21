@@ -157,7 +157,7 @@ var _ = Describe("Finalizer", func() {
 				},
 			})
 			ExpectApplied(ctx, env.Client, nodePool, nodeClaim)
-			ExpectMakeNodeClaimsInitialized(ctx, env.Client, nodeClaim)
+			ExpectMakeNodeClaimsInitialized(ctx, env.Client, fakeClock, nodeClaim)
 			ExpectObjectReconciled(ctx, env.Client, nodeClaimController, nodeClaim)
 			nodeClaim = ExpectExists(ctx, env.Client, nodeClaim)
 			// add a finalizer so we can make assertions about all status conditions
@@ -210,7 +210,7 @@ var _ = Describe("Finalizer", func() {
 		ExpectApplied(ctx, env.Client, node)
 
 		ExpectObjectReconciled(ctx, env.Client, nodeClaimController, nodeClaim)
-		ExpectMakeNodesReady(ctx, env.Client, node) // Remove the not-ready taint
+		ExpectMakeNodesReady(ctx, env.Client, fakeClock, node) // Remove the not-ready taint
 
 		nodeClaim = ExpectExists(ctx, env.Client, nodeClaim)
 		Expect(nodeClaim.StatusConditions().Get(v1.ConditionTypeRegistered).IsTrue()).To(BeTrue())

@@ -2462,8 +2462,8 @@ var _ = Context("Scheduling", func() {
 			}
 
 			// Make one of the nodes and nodeClaims initialized
-			ExpectMakeNodeClaimsInitialized(ctx, env.Client, nodeClaims[elem])
-			ExpectMakeNodesInitialized(ctx, env.Client, node)
+			ExpectMakeNodeClaimsInitialized(ctx, env.Client, fakeClock, nodeClaims[elem])
+			ExpectMakeNodesInitialized(ctx, env.Client, fakeClock, node)
 			ExpectReconcileSucceeded(ctx, nodeClaimStateController, client.ObjectKeyFromObject(nodeClaims[elem]))
 			ExpectReconcileSucceeded(ctx, nodeStateController, client.ObjectKeyFromObject(node))
 
@@ -2486,7 +2486,7 @@ var _ = Context("Scheduling", func() {
 				},
 			})
 			ExpectApplied(ctx, env.Client, node)
-			ExpectMakeNodesInitialized(ctx, env.Client, node)
+			ExpectMakeNodesInitialized(ctx, env.Client, fakeClock, node)
 			ExpectReconcileSucceeded(ctx, nodeStateController, client.ObjectKeyFromObject(node))
 
 			opts := test.PodOptions{ResourceRequirements: corev1.ResourceRequirements{
@@ -2512,7 +2512,7 @@ var _ = Context("Scheduling", func() {
 				},
 			})
 			ExpectApplied(ctx, env.Client, node)
-			ExpectMakeNodesInitialized(ctx, env.Client, node)
+			ExpectMakeNodesInitialized(ctx, env.Client, fakeClock, node)
 			ExpectReconcileSucceeded(ctx, nodeStateController, client.ObjectKeyFromObject(node))
 
 			opts := test.PodOptions{ResourceRequirements: corev1.ResourceRequirements{
@@ -2553,8 +2553,8 @@ var _ = Context("Scheduling", func() {
 
 			// Make one of the nodes and nodeClaims initialized
 			elem := rand.Intn(100) //nolint:gosec
-			ExpectMakeNodeClaimsInitialized(ctx, env.Client, nodeClaims[elem])
-			ExpectMakeNodesInitialized(ctx, env.Client, nodes[elem])
+			ExpectMakeNodeClaimsInitialized(ctx, env.Client, fakeClock, nodeClaims[elem])
+			ExpectMakeNodesInitialized(ctx, env.Client, fakeClock, nodes[elem])
 			ExpectReconcileSucceeded(ctx, nodeClaimStateController, client.ObjectKeyFromObject(nodeClaims[elem]))
 			ExpectReconcileSucceeded(ctx, nodeStateController, client.ObjectKeyFromObject(nodes[elem]))
 
@@ -2576,8 +2576,8 @@ var _ = Context("Scheduling", func() {
 				},
 			})
 			ExpectApplied(ctx, env.Client, nodeClaim, node)
-			ExpectMakeNodeClaimsInitialized(ctx, env.Client, nodeClaim)
-			ExpectMakeNodesInitialized(ctx, env.Client, node)
+			ExpectMakeNodeClaimsInitialized(ctx, env.Client, fakeClock, nodeClaim)
+			ExpectMakeNodesInitialized(ctx, env.Client, fakeClock, node)
 
 			ExpectReconcileSucceeded(ctx, nodeClaimStateController, client.ObjectKeyFromObject(nodeClaim))
 			ExpectReconcileSucceeded(ctx, nodeStateController, client.ObjectKeyFromObject(node))
@@ -2626,8 +2626,8 @@ var _ = Context("Scheduling", func() {
 					}},
 				)
 				ExpectApplied(ctx, env.Client, nodePool, nodeClaim, node, ds)
-				ExpectMakeNodeClaimsInitialized(ctx, env.Client, nodeClaim)
-				ExpectMakeNodesInitialized(ctx, env.Client, node)
+				ExpectMakeNodeClaimsInitialized(ctx, env.Client, fakeClock, nodeClaim)
+				ExpectMakeNodesInitialized(ctx, env.Client, fakeClock, node)
 
 				ExpectReconcileSucceeded(ctx, nodeClaimStateController, client.ObjectKeyFromObject(nodeClaim))
 				ExpectReconcileSucceeded(ctx, nodeStateController, client.ObjectKeyFromObject(node))
